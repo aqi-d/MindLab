@@ -2,16 +2,16 @@
   <div class="card card-center">
     <!-- 背景光晕 -->
     <div class="card-glow"></div>
-    
+
     <!-- 扫描线效果 -->
     <div class="scan-line"></div>
-    
+
     <!-- 故障纹理 -->
     <div class="card-glitch"></div>
-    
+
     <!-- 边框装饰 -->
     <div class="card-border"></div>
-    
+
     <div class="card-content">
       <!-- 头像区域 -->
       <div class="avatar-frame">
@@ -21,7 +21,7 @@
         <img :src="avatar" alt="Avatar" class="avatar" />
         <div class="avatar-glow"></div>
       </div>
-      
+
       <!-- 文字信息 -->
       <div class="info-section">
         <p class="greeting">{{ greeting }}</p>
@@ -34,10 +34,12 @@
 
       <!-- 社交链接 -->
       <div class="social-section">
-        <a v-for="(link, index) in socialLinks" :key="index"
-          :href="link.url" 
-          :target="link.external ? '_blank' : '_self'"
-          class="social-link" 
+        <a
+          v-for="(link, index) in socialLinks"
+          :key="index"
+          href="#"
+          @click.prevent="handleSocialClick(link)"
+          class="social-link"
           :title="link.title"
         >
           <span v-html="link.icon"></span>
@@ -58,36 +60,73 @@
     <div class="card-corner corner-tr"></div>
     <div class="card-corner corner-bl"></div>
     <div class="card-corner corner-br"></div>
+
+    <transition name="fade">
+      <div v-if="toastMessage" class="copy-toast">
+        {{ toastMessage }}
+      </div>
+    </transition>
   </div>
 </template>
 
 <script setup>
+import { ref } from "vue";
+
 defineProps({
   avatar: {
     type: String,
-    default: 'https://robohash.org/aqi?set=set4&size=200x200&bgset=bg2'
+    default: "https://robohash.org/aqi?set=set4&size=200x200&bgset=bg2",
   },
   greeting: {
     type: String,
-    default: 'Hello, I\'m'
+    default: "Hello, I'm",
   },
   name: {
     type: String,
-    default: 'aqi'
+    default: "aqi",
   },
   role: {
     type: String,
-    default: 'Developer & Designer'
+    default: "Developer & Designer",
   },
   socialLinks: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   statusText: {
     type: String,
-    default: 'ONLINE'
+    default: "ONLINE",
+  },
+});
+
+const toastMessage = ref("");
+const showToast = (msg) => {
+  toastMessage.value = msg;
+  setTimeout(() => {
+    toastMessage.value = "";
+  }, 2000);
+};
+
+const handleSocialClick = (link) => {
+  if (link.action === "copy") {
+    const email = link.url;
+    navigator.clipboard
+      .writeText(email)
+      .then(() => {
+        showToast(`✅ 邮箱 ${email} 已复制！`);
+      })
+      .catch((err) => {
+        console.error("复制失败:", err);
+        showToast("❌ 复制失败，请手动复制");
+      });
+  } else {
+    if (link.external) {
+      window.open(link.url, "_blank");
+    } else {
+      window.location.href = link.url;
+    }
   }
-})
+};
 </script>
 
 <style scoped>
@@ -102,7 +141,7 @@ defineProps({
   width: 220px;
   height: 320px;
   z-index: 100;
-  
+
   background: linear-gradient(
     135deg,
     rgba(15, 23, 42, 0.75) 0%,
@@ -111,16 +150,16 @@ defineProps({
   );
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  
+
   border: 1px solid rgba(255, 0, 255, 0.4);
   border-radius: 24px;
-  
-  box-shadow: 
+
+  box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.4),
     inset 0 0 40px rgba(255, 0, 255, 0.08),
     0 0 40px rgba(255, 0, 255, 0.15),
     0 0 80px rgba(0, 255, 255, 0.1);
-  
+
   overflow: visible;
   transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -128,7 +167,7 @@ defineProps({
 .card-center:hover {
   transform: translate(-50%, -50%) scale(1.02);
   border-color: rgba(0, 255, 255, 0.6);
-  box-shadow: 
+  box-shadow:
     0 12px 48px rgba(0, 0, 0, 0.5),
     inset 0 0 50px rgba(0, 255, 255, 0.12),
     0 0 60px rgba(255, 0, 255, 0.25),
@@ -144,11 +183,7 @@ defineProps({
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(
-    circle,
-    rgba(255, 0, 255, 0.15) 0%,
-    transparent 60%
-  );
+  background: radial-gradient(circle, rgba(255, 0, 255, 0.15) 0%, transparent 60%);
   opacity: 0;
   transition: opacity 0.6s ease;
   pointer-events: none;
@@ -162,11 +197,7 @@ defineProps({
 .card-glitch {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    0deg,
-    transparent 50%,
-    rgba(255, 0, 255, 0.03) 50%
-  );
+  background: linear-gradient(0deg, transparent 50%, rgba(255, 0, 255, 0.03) 50%);
   background-size: 100% 4px;
   animation: glitch-bg 0.5s steps(2) infinite;
   pointer-events: none;
@@ -176,8 +207,13 @@ defineProps({
 }
 
 @keyframes glitch-bg {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
 }
 
 .scan-line {
@@ -186,20 +222,20 @@ defineProps({
   left: -100%;
   width: 100%;
   height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(0, 255, 255, 0.8),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.8), transparent);
   animation: scan 5s ease-in-out infinite;
   pointer-events: none;
   z-index: 2;
 }
 
 @keyframes scan {
-  0%, 100% { left: -100%; }
-  50% { left: 100%; }
+  0%,
+  100% {
+    left: -100%;
+  }
+  50% {
+    left: 100%;
+  }
 }
 
 .card-border {
@@ -208,13 +244,16 @@ defineProps({
   border-radius: 24px;
   border: 1px solid transparent;
   background: linear-gradient(
-    135deg,
-    rgba(255, 0, 255, 0.5),
-    transparent 40%,
-    transparent 60%,
-    rgba(0, 255, 255, 0.5)
-  ) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+      135deg,
+      rgba(255, 0, 255, 0.5),
+      transparent 40%,
+      transparent 60%,
+      rgba(0, 255, 255, 0.5)
+    )
+    border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
@@ -293,26 +332,33 @@ defineProps({
   position: absolute;
   inset: -15px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(255, 0, 255, 0.3) 0%,
-    transparent 70%
-  );
+  background: radial-gradient(circle, rgba(255, 0, 255, 0.3) 0%, transparent 70%);
   animation: pulse-glow 3s ease-in-out infinite;
   z-index: 0;
 }
 
 @keyframes spin {
-  100% { transform: rotate(360deg); }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes spin-reverse {
-  100% { transform: rotate(-360deg); }
+  100% {
+    transform: rotate(-360deg);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.1); }
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
 }
 
 /* ========================================
@@ -352,8 +398,13 @@ defineProps({
 }
 
 @keyframes gradient-shift {
-  0%, 100% { background-position: 0% center; }
-  50% { background-position: 100% center; }
+  0%,
+  100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
 }
 
 .role {
@@ -373,8 +424,15 @@ defineProps({
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.2); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
 }
 
 /* ========================================
@@ -427,7 +485,7 @@ defineProps({
   border-color: rgba(255, 0, 255, 0.6);
   color: #fff;
   transform: translateY(-4px) scale(1.1);
-  box-shadow: 
+  box-shadow:
     0 10px 20px rgba(255, 0, 255, 0.3),
     0 0 15px rgba(0, 255, 255, 0.2);
 }
@@ -468,8 +526,15 @@ defineProps({
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; box-shadow: 0 0 10px #00ff88; }
-  50% { opacity: 0.4; box-shadow: 0 0 2px #00ff88; }
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 10px #00ff88;
+  }
+  50% {
+    opacity: 0.4;
+    box-shadow: 0 0 2px #00ff88;
+  }
 }
 
 .status-text {
@@ -486,18 +551,17 @@ defineProps({
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(0, 255, 136, 0.2),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.2), transparent);
   animation: wave 2s ease-in-out infinite;
 }
 
 @keyframes wave {
-  0% { left: -100%; }
-  100% { left: 100%; }
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
 }
 
 /* ========================================
@@ -545,8 +609,41 @@ defineProps({
   width: 20px;
   height: 20px;
   border-color: rgba(0, 255, 255, 0.8);
-  box-shadow: 
+  box-shadow:
     0 0 12px rgba(0, 255, 255, 0.6),
     inset 0 0 12px rgba(0, 255, 255, 0.2);
+}
+
+/* ========================================
+   复制成功提示 (Toast)
+   ======================================== */
+.copy-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(0, 255, 136, 0.5);
+  color: #00ff88;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  z-index: 999;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  backdrop-filter: blur(4px);
+  animation: fade-in-up 0.3s ease-out;
+  pointer-events: none;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 </style>
