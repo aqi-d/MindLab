@@ -129,7 +129,9 @@ const satCards = [
     title: "AI 资源库",
     subtitle: "探索前沿 AI 工具",
     clickable: true,
-    onClick: () => router.push("/ai-resources"),
+    onClick: () => {
+    window.open("https://ai-nav-64t.pages.dev/", "_blank");
+  },
   },
   {
     type: "quote",
