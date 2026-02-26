@@ -136,8 +136,7 @@ const satCards = [
   {
     type: "quote",
     angle: -18,
-    radius: 240,
-    text: "好安静,我是死了吗",
+    radius: 280,
   },
   {
     type: "calendar",

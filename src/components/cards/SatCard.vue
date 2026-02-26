@@ -26,7 +26,8 @@
         <div class="quote-content">
           <span class="quote-icon">"</span>
           <div class="quote-text">
-            <span>{{ text }}</span>
+            <span class="quote-line-1">黄色的树林里分出了两条路，</span>
+            <span class="quote-line-2">而我选择了人迹更少的一条</span>
           </div>
           <span class="quote-icon end">"</span>
         </div>
@@ -433,71 +434,75 @@ const cardPosition = computed(() => {
    语录卡片
    ======================================== */
 .card-quote {
-  width: 200px;
+  width: 280px; /* 稍微加宽，容纳两行文字 */
 }
 
 .card-quote .card-inner {
   justify-content: center;
+  align-items: flex-start; /* 顶部对齐 */
 }
 
 .quote-content {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 6px;
   width: 100%;
   justify-content: center;
+  line-height: 1.6; /* 增加行高，更有呼吸感 */
 }
 
 .quote-icon {
-  font-size: 1.5rem;
-  color: rgba(255, 0, 255, 0.6);
+  font-size: 1.8rem;
+  color: rgba(255, 215, 0, 0.8); /* 金色 */
   font-family: Georgia, serif;
   line-height: 1;
+  margin-top: 2px;
 }
 
 .quote-icon.end {
   transform: rotate(180deg);
+  margin-top: 2px;
 }
 
 .quote-text {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  flex-direction: column; /* 关键：垂直排列两行 */
+  gap: 4px; /* 两行之间的间距 */
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #fcd34d; /* 琥珀黄/金黄色 */
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+  text-align: left; /* 左对齐，方便第二行缩进 */
+  letter-spacing: 0.5px;
+}
+
+/* 第一行：正常显示 */
+.quote-line-1 {
+  display: block;
+  opacity: 0.9;
+}
+
+/* 第二行：电影感缩进 */
+.quote-line-2 {
+  display: block;
+  margin-left: 3.5em;
   color: #fff;
-  text-shadow: 0 0 15px rgba(255, 0, 255, 0.4);
+  font-style: italic;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
+  position: relative;
 }
 
-.quote-text span {
-  animation: neon-flicker 3s ease-in-out infinite;
+/* 可选：给第二行加一个微小的淡入动画 */
+.quote-line-2 {
+  animation: fadeInSlide 1s ease-out 0.3s forwards;
+  opacity: 0;
+  transform: translateX(-10px);
 }
 
-.quote-text .separator {
-  color: rgba(255, 0, 255, 0.5);
-  animation: none;
-  font-weight: 300;
-}
-
-@keyframes neon-flicker {
-  0%,
-  100% {
+@keyframes fadeInSlide {
+  to {
     opacity: 1;
-  }
-  92% {
-    opacity: 1;
-  }
-  93% {
-    opacity: 0.85;
-  }
-  94% {
-    opacity: 1;
-  }
-  95% {
-    opacity: 0.9;
-  }
-  96% {
-    opacity: 1;
+    transform: translateX(0);
   }
 }
 
