@@ -140,6 +140,10 @@ const satCards = [
     type: "quote",
     angle: -22,
     radius: 280,
+    clickable: true,
+    onClick: () => {
+    window.open("https://www.3body.com/", "_blank");
+  },
   },
   {
     type: "calendar",
