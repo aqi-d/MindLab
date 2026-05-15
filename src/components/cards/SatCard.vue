@@ -233,28 +233,40 @@ const fetchWeather = async () => {
     city.value = cityName || "Unknown";
     console.log('Fetching weather for:', city.value, latitude, longitude);
 
-    // 获取天气数据（添加超时控制）
+    // 获取天气数据（增加超时时间到 15 秒）
     const weatherController = new AbortController();
-    const weatherTimeout = setTimeout(() => weatherController.abort(), 8000); // 8秒超时
+    const weatherTimeout = setTimeout(() => {
+      console.warn('Weather API timeout after 15s');
+      weatherController.abort();
+    }, 15000); // 增加到 15 秒
     
-    const weatherRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=kmh`,
-      { signal: weatherController.signal }
-    );
-    
-    clearTimeout(weatherTimeout);
+    try {
+      const weatherRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=kmh`,
+        { signal: weatherController.signal }
+      );
+      
+      clearTimeout(weatherTimeout);
 
-    if (!weatherRes.ok) throw new Error("Weather API failed");
+      if (!weatherRes.ok) throw new Error("Weather API failed");
 
-    const weatherData = await weatherRes.json();
-    const current = weatherData.current;
+      const weatherData = await weatherRes.json();
+      const current = weatherData.current;
 
-    temperature.value = Math.round(current.temperature_2m);
-    weatherCode.value = current.weather_code;
-    windSpeed.value = current.wind_speed_10m;
+      temperature.value = Math.round(current.temperature_2m);
+      weatherCode.value = current.weather_code;
+      windSpeed.value = current.wind_speed_10m;
 
-    loading.value = false;
-    console.log('Weather loaded successfully');
+      loading.value = false;
+      console.log('Weather loaded successfully');
+    } catch (weatherErr) {
+      clearTimeout(weatherTimeout);
+      if (weatherErr.name === 'AbortError') {
+        console.error('Weather API request timed out');
+        throw new Error('Weather API timeout');
+      }
+      throw weatherErr;
+    }
   } catch (err) {
     console.error('Weather fetch error:', err);
     error.value = true;
@@ -262,6 +274,8 @@ const fetchWeather = async () => {
     city.value = "定位受限";
     temperature.value = "--";
     windSpeed.value = 0;
+  } finally { 
+    loading.value = false;
   }
 };
 
@@ -735,5 +749,4 @@ const cardPosition = computed(() => {
     0 0 10px rgba(0, 255, 255, 0.5),
     inset 0 0 10px rgba(0, 255, 255, 0.2);
 }
-
-</style>
+<>/style
