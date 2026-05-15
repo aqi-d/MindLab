@@ -749,4 +749,4 @@ const cardPosition = computed(() => {
     0 0 10px rgba(0, 255, 255, 0.5),
     inset 0 0 10px rgba(0, 255, 255, 0.2);
 }
-<>/style
+</style>
