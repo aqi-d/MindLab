@@ -175,25 +175,74 @@ const updateMeshScale = () => {
 
 const initWebGPU = async () => {
   if (isMobile.value) {
+    console.log('📱 Mobile detected, skipping WebGPU');
     webgpuLoaded.value = true;
     return;
   }
 
-  try {
-    const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) throw new Error("WebGPU not supported");
-    const device = await adapter.requestDevice();
+  console.log('💻 Desktop detected, starting WebGPU init...');
 
+  // 多重超时保护
+  const timeouts = [];
+  const addTimeout = (ms, label) => {
+    const id = setTimeout(() => {
+      console.warn(`⚠️ ${label} timeout after ${ms}ms`);
+    }, ms);
+    timeouts.push(id);
+    return id;
+  };
+
+  const clearAllTimeouts = () => {
+    timeouts.forEach(id => clearTimeout(id));
+  };
+
+  // 10秒后强制隐藏 Loader（无论如何）
+  const forceHideTimeout = setTimeout(() => {
+    console.error('❌ CRITICAL: Force hiding loader after 10s timeout');
+    webgpuLoaded.value = true;
+  }, 10000);
+
+  try {
+    // Step 1: 检查 WebGPU 支持
+    console.log('Step 1: Checking WebGPU support...');
+    if (!navigator.gpu) {
+      throw new Error("WebGPU not supported");
+    }
+    console.log('✅ Step 1 passed: WebGPU supported');
+
+    // Step 2: 获取 Adapter
+    console.log('Step 2: Requesting adapter...');
+    const adapterTimeout = addTimeout(3000, 'Adapter request');
+    const adapter = await navigator.gpu.requestAdapter();
+    clearTimeout(adapterTimeout);
+    
+    if (!adapter) {
+      throw new Error("No GPU adapter found");
+    }
+    console.log('✅ Step 2 passed: Adapter acquired', adapter);
+
+    // Step 3: 获取 Device
+    console.log('Step 3: Requesting device...');
+    const deviceTimeout = addTimeout(3000, 'Device request');
+    const device = await adapter.requestDevice();
+    clearTimeout(deviceTimeout);
+    console.log('✅ Step 3 passed: Device acquired');
+
+    // Step 4: 初始化 Renderer
+    console.log('Step 4: Initializing renderer...');
     renderer = new THREE.WebGPURenderer({
       canvas: canvasRef.value,
       antialias: false,
     });
+    
+    const rendererTimeout = addTimeout(3000, 'Renderer init');
     await renderer.init();
+    clearTimeout(rendererTimeout);
+    console.log('✅ Step 4 passed: Renderer initialized');
 
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
-
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -201,12 +250,18 @@ const initWebGPU = async () => {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 5;
 
+    // Step 5: 加载纹理
+    console.log('Step 5: Loading textures...');
     const textureLoader = new THREE.TextureLoader();
+    
+    const textureTimeout = addTimeout(5000, 'Texture loading');
     const [rawMap, depthMap, edgeMap] = await Promise.all([
       textureLoader.loadAsync(rawMapSrc),
       textureLoader.loadAsync(depthMapSrc),
       textureLoader.loadAsync(edgeMapSrc),
     ]);
+    clearTimeout(textureTimeout);
+    console.log('✅ Step 5 passed: Textures loaded');
 
     rawMap.flipY = false;
     rawMap.colorSpace = THREE.SRGBColorSpace;
@@ -216,20 +271,13 @@ const initWebGPU = async () => {
     const strength = 0.01;
     const tDepthMap = texture(depthMap);
     const tEdgeMap = texture(edgeMap);
-
     const tMap = texture(rawMap, uv().add(tDepthMap.r.mul(uPointer).mul(strength))).mul(0.5);
-
     const depth = tDepthMap;
     const flow = sub(1, smoothstep(0, 0.02, abs(depth.sub(uProgress))));
-    const mask = oneMinus(tEdgeMap)
-      .mul(flow)
-      .mul(vec3(10, 0.4, 10));
+    const mask = oneMinus(tEdgeMap).mul(flow).mul(vec3(10, 0.4, 10));
     const sceneColorNode = blendScreen(tMap, mask);
 
-    const material = new THREE.MeshBasicNodeMaterial({
-      colorNode: sceneColorNode,
-    });
-
+    const material = new THREE.MeshBasicNodeMaterial({ colorNode: sceneColorNode });
     const geometry = new THREE.PlaneGeometry(WIDTH / 100, HEIGHT / 100);
     mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
@@ -262,11 +310,23 @@ const initWebGPU = async () => {
     window.addEventListener("resize", onResize);
     window.addEventListener("mousemove", onMouseMove);
 
+    // 成功！清除所有超时
+    clearAllTimeouts();
+    clearTimeout(forceHideTimeout);
+    
+    console.log('✅ ALL STEPS PASSED! Hiding loader in 300ms...');
     setTimeout(() => {
       webgpuLoaded.value = true;
+      console.log('✅ Loader hidden successfully');
     }, 300);
+    
   } catch (error) {
-    console.error("❌ WebGPU Init Failed:", error);
+    clearAllTimeouts();
+    clearTimeout(forceHideTimeout);
+    console.error("❌ WebGPU Init Failed at some step:", error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     webgpuLoaded.value = true;
   }
 };
