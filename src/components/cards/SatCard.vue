@@ -231,7 +231,6 @@ const fetchWeather = async () => {
     }
 
     city.value = cityName || "Unknown";
-    console.log('Fetching weather for:', city.value, latitude, longitude);
 
     // 获取天气数据（增加超时时间到 15 秒）
     const weatherController = new AbortController();

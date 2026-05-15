@@ -12,6 +12,9 @@
     <!-- 加载动画 -->
     <Loader :hidden="webgpuLoaded" />
 
+    <!-- Toast 提示 -->
+    <Toast ref="toastRef" />
+
     <!-- UI 层 -->
     <div class="ui-layer">
       <!-- 🌟 中心卡片 -->
@@ -70,9 +73,11 @@ import edgeMapSrc from "@/assets/edge-2.png";
 import CenterCard from "@/components/cards/CenterCard.vue";
 import SatCard from "@/components/cards/SatCard.vue";
 import Loader from "@/components/Loader.vue";
+import Toast from "@/components/Toast.vue";
 
 const router = useRouter();
 const canvasRef = ref(null);
+const toastRef = ref(null);
 const currentMonth = ref("");
 const isMobile = ref(false);
 const webgpuLoaded = ref(false);
@@ -148,7 +153,9 @@ const satCards = [
     title: "Web3",
     subtitle: "Blockchain",
     clickable: true,
-    onClick: () => router.push("/web3"),
+    onClick: () => {
+      toastRef.value?.show("最近有点忙，未来再做吧。");
+    },
   },
   {
     type: "weather",
@@ -174,23 +181,17 @@ const updateMeshScale = () => {
 };
 
 const initWebGPU = async () => {
-  console.error('🚨🚨🚨 INITWEBGPU CALLED! 🚨🚨🚨');
-  console.error('Timestamp:', new Date().toISOString());
-  console.error('isMobile:', isMobile.value);
   
   if (isMobile.value) {
-    console.log('📱 Mobile detected, skipping WebGPU');
     webgpuLoaded.value = true;
     return;
   }
 
-  console.log('💻 Desktop detected, starting WebGPU init...');
 
   // 多重超时保护
   const timeouts = [];
   const addTimeout = (ms, label) => {
     const id = setTimeout(() => {
-      console.warn(`⚠️ ${label} timeout after ${ms}ms`);
     }, ms);
     timeouts.push(id);
     return id;
@@ -202,20 +203,16 @@ const initWebGPU = async () => {
 
   // 10秒后强制隐藏 Loader（无论如何）
   const forceHideTimeout = setTimeout(() => {
-    console.error('❌ CRITICAL: Force hiding loader after 10s timeout');
     webgpuLoaded.value = true;
   }, 10000);
 
   try {
     // Step 1: 检查 WebGPU 支持
-    console.log('Step 1: Checking WebGPU support...');
     if (!navigator.gpu) {
       throw new Error("WebGPU not supported");
     }
-    console.log('✅ Step 1 passed: WebGPU supported');
 
     // Step 2: 获取 Adapter
-    console.log('Step 2: Requesting adapter...');
     const adapterTimeout = addTimeout(3000, 'Adapter request');
     const adapter = await navigator.gpu.requestAdapter();
     clearTimeout(adapterTimeout);
@@ -223,17 +220,13 @@ const initWebGPU = async () => {
     if (!adapter) {
       throw new Error("No GPU adapter found");
     }
-    console.log('✅ Step 2 passed: Adapter acquired', adapter);
 
     // Step 3: 获取 Device
-    console.log('Step 3: Requesting device...');
     const deviceTimeout = addTimeout(3000, 'Device request');
     const device = await adapter.requestDevice();
     clearTimeout(deviceTimeout);
-    console.log('✅ Step 3 passed: Device acquired');
 
     // Step 4: 初始化 Renderer
-    console.log('Step 4: Initializing renderer...');
     renderer = new THREE.WebGPURenderer({
       canvas: canvasRef.value,
       antialias: false,
@@ -242,7 +235,6 @@ const initWebGPU = async () => {
     const rendererTimeout = addTimeout(3000, 'Renderer init');
     await renderer.init();
     clearTimeout(rendererTimeout);
-    console.log('✅ Step 4 passed: Renderer initialized');
 
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -255,7 +247,6 @@ const initWebGPU = async () => {
     camera.position.z = 5;
 
     // Step 5: 加载纹理
-    console.log('Step 5: Loading textures...');
     const textureLoader = new THREE.TextureLoader();
     
     const textureTimeout = addTimeout(5000, 'Texture loading');
@@ -265,7 +256,6 @@ const initWebGPU = async () => {
       textureLoader.loadAsync(edgeMapSrc),
     ]);
     clearTimeout(textureTimeout);
-    console.log('✅ Step 5 passed: Textures loaded');
 
     rawMap.flipY = false;
     rawMap.colorSpace = THREE.SRGBColorSpace;
@@ -291,7 +281,7 @@ const initWebGPU = async () => {
     const bloomPass = bloom(scenePassColor, 1, 0.5, 1);
     const finalNode = add(scenePassColor, bloomPass);
 
-    postProcessing = new THREE.PostProcessing(renderer);
+    postProcessing = new THREE.RenderPipeline(renderer);
     postProcessing.outputNode = finalNode;
 
     gsap.to(uProgress, {
@@ -318,19 +308,13 @@ const initWebGPU = async () => {
     clearAllTimeouts();
     clearTimeout(forceHideTimeout);
     
-    console.log('✅ ALL STEPS PASSED! Hiding loader in 300ms...');
     setTimeout(() => {
       webgpuLoaded.value = true;
-      console.log('✅ Loader hidden successfully');
     }, 300);
     
   } catch (error) {
     clearAllTimeouts();
     clearTimeout(forceHideTimeout);
-    console.error("❌ WebGPU Init Failed at some step:", error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
     webgpuLoaded.value = true;
   }
 };
