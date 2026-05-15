@@ -132,7 +132,7 @@ const fetchWeather = async () => {
   try {
     loading.value = true;
 
-    // 检查缓存（10分钟内使用缓存数据）
+    // 检查缓存（30分钟内使用缓存数据，减少API调用）
     const cacheKey = 'weather_location_cache';
     const cached = localStorage.getItem(cacheKey);
     
@@ -143,8 +143,8 @@ const fetchWeather = async () => {
         const cacheData = JSON.parse(cached);
         const now = Date.now();
         
-        // 如果缓存未过期（10分钟 = 600000毫秒）
-        if (now - cacheData.timestamp < 600000 && cacheData.latitude && cacheData.longitude) {
+        // 如果缓存未过期（30分钟 = 1800000毫秒）
+        if (now - cacheData.timestamp < 1800000 && cacheData.latitude && cacheData.longitude) {
           latitude = cacheData.latitude;
           longitude = cacheData.longitude;
           cityName = cacheData.city;
@@ -154,12 +154,17 @@ const fetchWeather = async () => {
       }
     }
 
-    // 如果没有有效缓存，尝试多个IP定位API
+    // 如果没有有效缓存，尝试IP定位API
     if (!latitude || !longitude) {
       
-      // API 1: ipapi.co (主要API)
+      // API 1: ipapi.co (使用HTTPS，添加错误处理)
       try {
-        const res1 = await fetch("https://ipapi.co/json/");
+        const res1 = await fetch("https://ipapi.co/json/", {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
         if (res1.ok) {
           const data = await res1.json();
           if (!data.error && data.latitude && data.longitude) {
@@ -169,12 +174,18 @@ const fetchWeather = async () => {
           }
         }
       } catch (e) {
+        console.log('ipapi.co failed:', e.message);
       }
       
-      // API 2: ipwho.is (备用API 1)
+      // API 2: ipwho.is (备用API，使用HTTPS)
       if (!latitude || !longitude) {
         try {
-          const res2 = await fetch("https://ipwho.is/");
+          const res2 = await fetch("https://ipwho.is/", {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            }
+          });
           if (res2.ok) {
             const data = await res2.json();
             if (data.success && data.latitude && data.longitude) {
@@ -184,14 +195,19 @@ const fetchWeather = async () => {
             }
           }
         } catch (e) {
-          console.log(e.message);
+          console.log('ipwho.is failed:', e.message);
         }
       }
       
-      // API 3: ip-api.com (备用API 2)
+      // API 3: ip-api.com (使用HTTPS版本)
       if (!latitude || !longitude) {
         try {
-          const res3 = await fetch("http://ip-api.com/json/?fields=lat,lon,city");
+          const res3 = await fetch("https://ip-api.com/json/?fields=lat,lon,city", {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            }
+          });
           if (res3.ok) {
             const data = await res3.json();
             if (data.lat && data.lon) {
@@ -201,13 +217,16 @@ const fetchWeather = async () => {
             }
           }
         } catch (e) {
-          console.log(e.message);
+          console.log('ip-api.com failed:', e.message);
         }
       }
       
-      // 如果所有API都失败
+      // 如果所有API都失败，使用默认位置（北京）
       if (!latitude || !longitude) {
-        throw new Error("All location APIs failed");
+        console.warn('All location APIs failed, using default location (Beijing)');
+        latitude = 39.9042;
+        longitude = 116.4074;
+        cityName = "北京";
       }
       
       // 缓存位置数据
