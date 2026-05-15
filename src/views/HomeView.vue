@@ -119,13 +119,11 @@ const config = {
   ],
 };
 
-// 🪐 卫星卡片配置
 const satCards = [
   {
     type: "ai",
     angle: -90,
     radius: 220,
-    icon: "🧠",
     title: "AI 资源库",
     subtitle: "探索前沿 AI 工具",
     clickable: true,
@@ -135,19 +133,18 @@ const satCards = [
   },
   {
     type: "quote",
-    angle: -18,
+    angle: -22,
     radius: 280,
   },
   {
     type: "calendar",
-    angle: 25,
-    radius: 230,
+    angle: 24,
+    radius: 280,
   },
   {
     type: "web3",
     angle: 90,
     radius: 220,
-    icon: "⛓️",
     title: "Web3",
     subtitle: "Blockchain",
     clickable: true,
@@ -156,7 +153,7 @@ const satCards = [
   {
     type: "weather",
     angle: 180,
-    radius: 240,
+    radius: 210,
   },
 ];
 

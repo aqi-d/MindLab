@@ -11,10 +11,6 @@
     <div class="card-inner">
       <!-- AI/Web3 类型 -->
       <template v-if="type === 'ai' || type === 'web3'">
-        <div class="card-icon-wrapper">
-          <span class="card-icon">{{ icon }}</span>
-          <div class="icon-glow"></div>
-        </div>
         <div class="card-info">
           <h3>{{ title }}</h3>
           <p>{{ subtitle }}</p>
@@ -26,8 +22,8 @@
         <div class="quote-content">
           <span class="quote-icon">"</span>
           <div class="quote-text">
-            <span class="quote-line-1">黄色的树林里分出了两条路，</span>
-            <span class="quote-line-2">而我选择了人迹更少的一条</span>
+            <span class="quote-line-1">人类...</span>
+            <span class="quote-line-2">不感谢AI</span>
           </div>
           <span class="quote-icon end">"</span>
         </div>
@@ -37,17 +33,21 @@
       <template v-else-if="type === 'calendar'">
         <div class="calendar-content">
           <div class="cal-header">
-            <span class="cal-icon">📅</span>
-            <!-- 使用动态月份 -->
             <span class="cal-month">{{ currentMonthStr }}</span>
           </div>
-          <div class="cal-days">
-            <!-- 遍历生成的日期数组 -->
+          <div class="cal-weekdays">
+            <span v-for="day in weekDays" :key="day" class="cal-weekday">{{ day }}</span>
+          </div>
+          <div class="cal-days-grid">
             <span
               v-for="(item, index) in calendarDays"
               :key="index"
               class="cal-day"
-              :class="{ active: item.isToday }"
+              :class="{ 
+                active: item.isToday,
+                empty: item.isEmpty,
+                'other-month': item.isOtherMonth
+              }"
             >
               {{ item.day }}
             </span>
@@ -85,9 +85,6 @@
     <div class="card-corner corner-tr"></div>
     <div class="card-corner corner-bl"></div>
     <div class="card-corner corner-br"></div>
-
-    <!-- 扫描线效果 -->
-    <div class="scan-line"></div>
   </div>
 </template>
 
@@ -135,30 +132,100 @@ const fetchWeather = async () => {
   try {
     loading.value = true;
 
-    // 1. 获取 IP 定位
-    const locationRes = await fetch("https://ipapi.co/json/");
-
-    // 检查响应状态
-    if (!locationRes.ok) {
-      throw new Error("Location API blocked or failed");
+    // 检查缓存（10分钟内使用缓存数据）
+    const cacheKey = 'weather_location_cache';
+    const cached = localStorage.getItem(cacheKey);
+    
+    let latitude, longitude, cityName;
+    
+    if (cached) {
+      try {
+        const cacheData = JSON.parse(cached);
+        const now = Date.now();
+        
+        // 如果缓存未过期（10分钟 = 600000毫秒）
+        if (now - cacheData.timestamp < 600000 && cacheData.latitude && cacheData.longitude) {
+          latitude = cacheData.latitude;
+          longitude = cacheData.longitude;
+          cityName = cacheData.city;
+        }
+      } catch (e) {
+        console.log(e);
+      }
     }
 
-    const locationData = await locationRes.json();
-
-    // 检查接口是否返回了错误对象 (比如限额)
-    if (locationData.error) {
-      throw new Error("Location API returned error: " + locationData.reason);
-    }
-
-    const { latitude, longitude, city: cityName } = locationData;
-
+    // 如果没有有效缓存，尝试多个IP定位API
     if (!latitude || !longitude) {
-      throw new Error("Invalid coordinates received");
+      
+      // API 1: ipapi.co (主要API)
+      try {
+        const res1 = await fetch("https://ipapi.co/json/");
+        if (res1.ok) {
+          const data = await res1.json();
+          if (!data.error && data.latitude && data.longitude) {
+            latitude = data.latitude;
+            longitude = data.longitude;
+            cityName = data.city;
+          }
+        }
+      } catch (e) {
+      }
+      
+      // API 2: ipwho.is (备用API 1)
+      if (!latitude || !longitude) {
+        try {
+          const res2 = await fetch("https://ipwho.is/");
+          if (res2.ok) {
+            const data = await res2.json();
+            if (data.success && data.latitude && data.longitude) {
+              latitude = data.latitude;
+              longitude = data.longitude;
+              cityName = data.city;
+            }
+          }
+        } catch (e) {
+          console.log(e.message);
+        }
+      }
+      
+      // API 3: ip-api.com (备用API 2)
+      if (!latitude || !longitude) {
+        try {
+          const res3 = await fetch("http://ip-api.com/json/?fields=lat,lon,city");
+          if (res3.ok) {
+            const data = await res3.json();
+            if (data.lat && data.lon) {
+              latitude = data.lat;
+              longitude = data.lon;
+              cityName = data.city;
+            }
+          }
+        } catch (e) {
+          console.log(e.message);
+        }
+      }
+      
+      // 如果所有API都失败
+      if (!latitude || !longitude) {
+        throw new Error("All location APIs failed");
+      }
+      
+      // 缓存位置数据
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({
+          latitude,
+          longitude,
+          city: cityName || "Unknown",
+          timestamp: Date.now()
+        }));
+      } catch (e) {
+        console.log(e.message);
+      }
     }
 
     city.value = cityName || "Unknown";
 
-    // 2. 获取天气数据
+    // 获取天气数据
     const weatherRes = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=kmh`,
     );
@@ -174,7 +241,6 @@ const fetchWeather = async () => {
 
     loading.value = false;
   } catch (err) {
-    console.warn("⚠️ 天气定位失败 (可能是广告拦截插件导致):", err.message);
     error.value = true;
     loading.value = false;
     city.value = "定位受限";
@@ -183,34 +249,41 @@ const fetchWeather = async () => {
   }
 };
 
-// ✅ 新增：获取日期逻辑
 const calendarDays = ref([]);
 const currentMonthStr = ref("");
+const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
 const initCalendar = () => {
   const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
   const today = now.getDate();
-  const month = now.getMonth() + 1; // 月份是 0-11，所以 +1
 
-  // 设置月份显示 (例如 "2月")
-  currentMonthStr.value = `${month}月`;
+  currentMonthStr.value = `${year}年${month + 1}月`;
 
-  // 生成日期数组：以今天为中心，前后各取2天，共5天
-  // 逻辑：今天 -2, 今天 -1, 今天, 今天 +1, 今天 +2
   const days = [];
-  for (let i = -2; i <= 2; i++) {
-    let day = today + i;
+  
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+  const daysInMonth = lastDayOfMonth.getDate();
+  const startDayOfWeek = firstDayOfMonth.getDay();
 
-    // 简单处理跨月逻辑 (如果小于1或大于当月天数，这里简化处理，仅做演示)
-    // 如果需要完美的跨月计算，需要更复杂的 Date 操作，但通常视觉上做简单加减即可
-    // 为了防止出现 0 或负数，我们可以做个简单判断，或者直接用 Date 对象算
-    const targetDate = new Date(now);
-    targetDate.setDate(today + i);
+  for (let i = 0; i < startDayOfWeek; i++) {
+    days.push({ day: "", isEmpty: true, isToday: false, isOtherMonth: false });
+  }
 
+  for (let day = 1; day <= daysInMonth; day++) {
     days.push({
-      day: targetDate.getDate(),
-      isToday: targetDate.getDate() === today,
+      day: day,
+      isEmpty: false,
+      isToday: day === today,
+      isOtherMonth: false,
     });
+  }
+
+  const totalCells = Math.ceil((startDayOfWeek + daysInMonth) / 7) * 7;
+  for (let i = days.length; i < totalCells; i++) {
+    days.push({ day: "", isEmpty: true, isToday: false, isOtherMonth: false });
   }
 
   calendarDays.value = days;
@@ -333,30 +406,6 @@ const cardPosition = computed(() => {
 }
 
 /* ========================================
-   扫描线效果
-   ======================================== */
-.scan-line {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.8), transparent);
-  animation: scan 4s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes scan {
-  0%,
-  100% {
-    left: -100%;
-  }
-  50% {
-    left: 100%;
-  }
-}
-
-/* ========================================
    卡片内容
    ======================================== */
 .card-inner {
@@ -369,49 +418,13 @@ const cardPosition = computed(() => {
   pointer-events: none;
 }
 
-/* ========================================
-   AI / Web3 卡片
-   ======================================== */
-.card-icon-wrapper {
-  position: relative;
-  width: 48px;
-  height: 48px;
+.card-info {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-}
-
-.card-icon {
-  font-size: 2rem;
-  filter: drop-shadow(0 0 10px rgba(255, 0, 255, 0.6));
-  transition: transform 0.3s ease;
-}
-
-.card-sat:hover .card-icon {
-  transform: scale(1.1);
-}
-
-.icon-glow {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 0, 255, 0.4) 0%, transparent 70%);
-  opacity: 0.5;
-  animation: pulse-glow 2s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes pulse-glow {
-  0%,
-  100% {
-    opacity: 0.3;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.6;
-    transform: scale(1.1);
-  }
+  text-align: center;
+  width: 100%;
 }
 
 .card-info h3 {
@@ -480,6 +493,12 @@ const cardPosition = computed(() => {
 .quote-line-1 {
   display: block;
   opacity: 0.9;
+  color: #fff;
+  font-style: italic;
+  ext-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
+  animation: fadeInSlide 1s ease-out 0.3s forwards;
+  opacity: 0;
+  transform: translateX(-10px);
 }
 
 /* 第二行：电影感缩进 */
@@ -490,11 +509,7 @@ const cardPosition = computed(() => {
   font-style: italic;
   text-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
   position: relative;
-}
-
-/* 可选：给第二行加一个微小的淡入动画 */
-.quote-line-2 {
-  animation: fadeInSlide 1s ease-out 0.3s forwards;
+  animation: fadeInSlide 1s ease-out 1s forwards;
   opacity: 0;
   transform: translateX(-10px);
 }
@@ -510,12 +525,12 @@ const cardPosition = computed(() => {
    日历卡片
    ======================================== */
 .card-calendar {
-  width: 160px;
+  width: 260px;
 }
 
 .card-calendar .card-inner {
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .cal-header {
@@ -527,10 +542,6 @@ const cardPosition = computed(() => {
   border-bottom: 1px solid rgba(255, 0, 255, 0.2);
 }
 
-.cal-icon {
-  font-size: 1rem;
-}
-
 .cal-month {
   font-size: 0.75rem;
   font-weight: 600;
@@ -538,26 +549,52 @@ const cardPosition = computed(() => {
   letter-spacing: 1px;
 }
 
-.cal-days {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: rgba(255, 0, 255, 0.6);
+  padding: 2px 0;
+}
+
+.cal-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
   width: 100%;
 }
 
 .cal-day {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 600;
   color: #94a3b8;
   background: rgba(0, 255, 255, 0.05);
   border: 1px solid rgba(0, 255, 255, 0.15);
   border-radius: 6px;
   transition: all 0.3s ease;
+}
+
+.cal-day.empty {
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
+
+.cal-day.other-month {
+  opacity: 0.3;
 }
 
 .cal-day.active {

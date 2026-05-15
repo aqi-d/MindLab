@@ -3,9 +3,6 @@
     <!-- 背景光晕 -->
     <div class="card-glow"></div>
 
-    <!-- 扫描线效果 -->
-    <div class="scan-line"></div>
-
     <!-- 故障纹理 -->
     <div class="card-glitch"></div>
 
@@ -213,28 +210,6 @@ const handleSocialClick = (link) => {
   }
   50% {
     transform: translateY(-2px);
-  }
-}
-
-.scan-line {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.8), transparent);
-  animation: scan 5s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 2;
-}
-
-@keyframes scan {
-  0%,
-  100% {
-    left: -100%;
-  }
-  50% {
-    left: 100%;
   }
 }
 
