@@ -132,7 +132,7 @@ const fetchWeather = async () => {
   try {
     loading.value = true;
 
-    // 检查缓存（30分钟内使用缓存数据，减少API调用）
+    // 检查缓存（30分钟内使用缓存数据）
     const cacheKey = 'weather_location_cache';
     const cached = localStorage.getItem(cacheKey);
     
@@ -143,85 +143,73 @@ const fetchWeather = async () => {
         const cacheData = JSON.parse(cached);
         const now = Date.now();
         
-        // 如果缓存未过期（30分钟 = 1800000毫秒）
         if (now - cacheData.timestamp < 1800000 && cacheData.latitude && cacheData.longitude) {
           latitude = cacheData.latitude;
           longitude = cacheData.longitude;
           cityName = cacheData.city;
         }
       } catch (e) {
-        console.log(e);
+        console.log('Cache parse error:', e);
       }
     }
 
-    // 如果没有有效缓存，尝试IP定位API
+    // 如果没有有效缓存，尝试获取位置
     if (!latitude || !longitude) {
+      console.log('Fetching location...');
       
-      // API 1: ipapi.co (使用HTTPS，添加错误处理)
+      // API 1: geolocation-db.com (对CORS更友好)
       try {
-        const res1 = await fetch("https://ipapi.co/json/", {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+        
+        const res = await fetch("https://geolocation-db.com/json/", {
           method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
+          signal: controller.signal
         });
-        if (res1.ok) {
-          const data = await res1.json();
-          if (!data.error && data.latitude && data.longitude) {
+        
+        clearTimeout(timeoutId);
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data.latitude && data.longitude) {
             latitude = data.latitude;
             longitude = data.longitude;
-            cityName = data.city;
+            cityName = data.city || "Unknown";
+            console.log('Location from geolocation-db:', cityName);
           }
         }
       } catch (e) {
-        console.log('ipapi.co failed:', e.message);
+        console.log('geolocation-db failed:', e.message);
       }
       
-      // API 2: ipwho.is (备用API，使用HTTPS)
+      // API 2: ipapi.co (备用)
       if (!latitude || !longitude) {
         try {
-          const res2 = await fetch("https://ipwho.is/", {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const res = await fetch("https://ipapi.co/json/", {
             method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            }
+            signal: controller.signal
           });
-          if (res2.ok) {
-            const data = await res2.json();
-            if (data.success && data.latitude && data.longitude) {
+          
+          clearTimeout(timeoutId);
+          
+          if (res.ok) {
+            const data = await res.json();
+            if (!data.error && data.latitude) {
               latitude = data.latitude;
               longitude = data.longitude;
-              cityName = data.city;
+              cityName = data.city || "Unknown";
+              console.log('Location from ipapi.co:', cityName);
             }
           }
         } catch (e) {
-          console.log('ipwho.is failed:', e.message);
+          console.log('ipapi.co failed:', e.message);
         }
       }
       
-      // API 3: ip-api.com (使用HTTPS版本)
-      if (!latitude || !longitude) {
-        try {
-          const res3 = await fetch("https://ip-api.com/json/?fields=lat,lon,city", {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            }
-          });
-          if (res3.ok) {
-            const data = await res3.json();
-            if (data.lat && data.lon) {
-              latitude = data.lat;
-              longitude = data.lon;
-              cityName = data.city;
-            }
-          }
-        } catch (e) {
-          console.log('ip-api.com failed:', e.message);
-        }
-      }
-      
-      // 如果所有API都失败，使用默认位置（北京）
+      // 如果所有API都失败，使用默认位置
       if (!latitude || !longitude) {
         console.warn('All location APIs failed, using default location (Beijing)');
         latitude = 39.9042;
@@ -238,16 +226,23 @@ const fetchWeather = async () => {
           timestamp: Date.now()
         }));
       } catch (e) {
-        console.log(e.message);
+        console.log('Cache save error:', e);
       }
     }
 
     city.value = cityName || "Unknown";
+    console.log('Fetching weather for:', city.value, latitude, longitude);
 
-    // 获取天气数据
+    // 获取天气数据（添加超时控制）
+    const weatherController = new AbortController();
+    const weatherTimeout = setTimeout(() => weatherController.abort(), 8000); // 8秒超时
+    
     const weatherRes = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=kmh`,
+      { signal: weatherController.signal }
     );
+    
+    clearTimeout(weatherTimeout);
 
     if (!weatherRes.ok) throw new Error("Weather API failed");
 
@@ -259,7 +254,9 @@ const fetchWeather = async () => {
     windSpeed.value = current.wind_speed_10m;
 
     loading.value = false;
+    console.log('Weather loaded successfully');
   } catch (err) {
+    console.error('Weather fetch error:', err);
     error.value = true;
     loading.value = false;
     city.value = "定位受限";
@@ -738,4 +735,3 @@ const cardPosition = computed(() => {
     0 0 10px rgba(0, 255, 255, 0.5),
     inset 0 0 10px rgba(0, 255, 255, 0.2);
 }
-</style>
