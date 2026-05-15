@@ -285,7 +285,7 @@ const initWebGPU = async () => {
     const bloomPass = bloom(scenePassColor, 1, 0.5, 1);
     const finalNode = add(scenePassColor, bloomPass);
 
-    postProcessing = new THREE.RenderPipeline(renderer);
+    postProcessing = new THREE.PostProcessing(renderer);
     postProcessing.outputNode = finalNode;
 
     gsap.to(uProgress, {
