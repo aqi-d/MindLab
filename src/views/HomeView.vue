@@ -16,7 +16,7 @@
     <Toast ref="toastRef" />
 
     <!-- UI 层 -->
-    <div class="ui-layer">
+    <div class="ui-layer" :data-theme="currentTheme">
       <!-- 🌟 中心卡片 -->
       <CenterCard
         :avatar="config.avatar"
@@ -25,6 +25,7 @@
         :role="config.role"
         :social-links="config.socialLinks"
         :status-text="config.statusText"
+        :theme="currentTheme"
       />
 
       <!-- 🪐 卫星卡片 -->
@@ -40,6 +41,7 @@
         :text="card.text"
         :month="currentMonth"
         :clickable="card.clickable"
+        :theme="currentTheme"
         @click="handleCardClick(card)"
       />
     </div>
@@ -55,19 +57,30 @@ import {
   blendScreen,
   oneMinus,
   smoothstep,
-  sub,
   texture,
   uniform,
   uv,
   vec3,
   add,
+  float,
+  mod,
+  mx_cell_noise_float,
+  vec2,
+  max,
+  select,
+  sub,
+  Fn,
 } from "three/tsl";
 import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 import gsap from "gsap";
 
-import rawMapSrc from "@/assets/raw-2.png";
-import depthMapSrc from "@/assets/depth-2.png";
-import edgeMapSrc from "@/assets/edge-2.png";
+import rawMapSrc1 from "@/assets/raw-1.png";
+import depthMapSrc1 from "@/assets/depth-1.png";
+import rawMapSrc2 from "@/assets/raw-2.png";
+import depthMapSrc2 from "@/assets/depth-2.png";
+import edgeMapSrc2 from "@/assets/edge-2.png";
+import rawMapSrc3 from "@/assets/raw-3.jpg";
+import depthMapSrc3 from "@/assets/depth-3.png";
 
 // 导入组件
 import CenterCard from "@/components/cards/CenterCard.vue";
@@ -81,6 +94,7 @@ const toastRef = ref(null);
 const currentMonth = ref("");
 const isMobile = ref(false);
 const webgpuLoaded = ref(false);
+const currentTheme = ref("cyberpunk"); // 默认主题
 
 // WebGPU 变量
 let renderer = null;
@@ -88,13 +102,68 @@ let scene = null;
 let camera = null;
 let animationId = null;
 let mesh = null;
-let postProcessing = null;
+let renderPipeline = null;
+let material = null;
+let intervalId = null;
+let textureLoader = null;
+let currentRawTexture = null;
+let currentDepthTexture = null;
+let currentEdgeTexture = null;
 const uPointer = uniform(new THREE.Vector2(0));
 const uProgress = uniform(0);
 const WIDTH = 1600;
 const HEIGHT = 900;
 
-// 配置数据
+// sdCross 函数 - 使用 Fn 包装为 TSL 函数节点
+const sdCross = Fn(([p_immutable, b_immutable, r_immutable]) => {
+  const r = float(r_immutable).toVar();
+  const b = vec2(b_immutable).toVar();
+  const p = vec2(p_immutable).toVar();
+  
+  p.assign(abs(p));
+  p.assign(select(p.y.greaterThan(p.x), p.yx, p.xy));
+  
+  const q = vec2(p.sub(b)).toVar();
+  const k = float(max(q.y, q.x)).toVar();
+  const w = vec2(
+    select(k.greaterThan(0.0), q, vec2(b.y.sub(p.x), k.negate()))
+  ).toVar();
+  const d = float(max(w, 0.0).length()).toVar();
+  
+  return select(k.greaterThan(0.0), d, d.negate()).add(r);
+});
+
+// 图片配置数组 - 每个图片有不同的扫描效果类型和主题
+const imageConfigs = [
+  {
+    name: "Image 1",
+    raw: rawMapSrc1,
+    depth: depthMapSrc1,
+    edge: null,
+    effectType: "dots", // 点阵效果
+    theme: "medieval", // 中世纪风格
+  },
+  {
+    name: "Image 2",
+    raw: rawMapSrc2,
+    depth: depthMapSrc2,
+    edge: edgeMapSrc2,
+    effectType: "edge", // 边缘检测效果
+    theme: "cyberpunk", // 赛博朋克风格
+  },
+  {
+    name: "Image 3",
+    raw: rawMapSrc3,
+    depth: depthMapSrc3,
+    edge: null,
+    effectType: "cross", // 十字形效果
+    theme: "minimal", // 简约风格
+  },
+];
+
+let currentImageIndex = 0;
+const SWITCH_INTERVAL = 8000;
+
 const config = {
   avatar: "https://robohash.org/aqi?set=set4&size=200x200&bgset=bg2",
   greeting: "Hello, I'm",
@@ -112,7 +181,7 @@ const config = {
     //   url: 'https://space.bilibili.com/',
     //   title: 'Bilibili',
     //   external: true,
-    //   icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.813 4.653h.854c1.515 0 2.337.21 2.833.706.496.496.706 1.318.706 2.833v.854c0 .427-.029.815-.086 1.168.166.358.395.667.678.916.635.722.964 1.795.964 3.11 0 1.315-.329 2.388-.964 3.11-.249.283-.558.512-.916.678-.057.353-.086.741-.086 1.168v.854c0 1.515.21 2.337.706 2.833.496.496 1.318.706 2.833.706h.854c.427 0 .815.029 1.168.086.166-.358.395-.667.678-.916.722-.635 1.795-.964 3.11-.964 1.315 0 2.388.329 3.11.964.283.249.512.558.916.678.353-.057.741-.086 1.168-.086h-.854c-1.515 0-2.337-.21-2.833-.706-.496-.496-.706-1.318-.706-2.833v-.854c0-.427.029-.815.086-1.168-.358-.166-.667-.395-.916-.678-.635-.722-.964-1.795-.964-3.11 0-1.315.329-2.388.964-3.11.249-.283.558-.512.916-.678-.057-.353-.086-.741-.086-1.168v-.854c0-1.515.21-2.337.706-2.833.496-.496 1.318-.706 2.833-.706h.854c.427 0 .815.029 1.168.086.166-.358.395-.667.678-.916.722-.635 1.795-.964 3.11-.964 1.315 0 2.388.329 3.11.964.283.249.512.558.916.678.353-.057.741-.086 1.168-.086zm-7.626 6.26c-.686 0-1.242.556-1.242 1.242s.556 1.242 1.242 1.242 1.242-.556 1.242-1.242-.556-1.242-1.242-1.242zm5.826 0c-.686 0-1.242.556-1.242 1.242s.556 1.242 1.242 1.242 1.242-.556 1.242-1.242-.556-1.242-1.242-1.242z"/></svg>'
+    //   icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.813 4.653h.854c1.515 0 2.337.21 2.833.706.496.496.706 1.318.706 2.833v.854c0 .427-.029.815-.086 1.168.166.358.395.667.678.916.722.635.964 1.795.964 3.11 0 1.315-.329 2.388-.964 3.11-.249.283-.558.512-.916.678-.057.353-.086.741-.086 1.168v.854c0 1.515.21 2.337.706 2.833.496.496 1.318.706 2.833.706h.854c.427 0 .815.029 1.168.086.166-.358.395-.667.678-.916.722-.635 1.795-.964 3.11-.964 1.315 0 2.388.329 3.11.964.283.249.512.558.916.678.353-.057.741-.086 1.168-.086h-.854c-1.515 0-2.337-.21-2.833-.706-.496-.496-.706-1.318-.706-2.833v-.854c0-.427.029-.815.086-1.168-.358-.166-.667-.395-.916-.678-.635-.722-.964-1.795-.964-3.11 0-1.315.329-2.388.964-3.11.249-.283.558-.512.916-.678-.057-.353-.086-.741-.086-1.168v-.854c0-1.515.21-2.337.706-2.833.496-.496 1.318-.706 2.833-.706h.854c.427 0 .815.029 1.168.086.166-.358.395-.667.678-.916.722-.635 1.795-.964 3.11-.964 1.315 0 2.388.329 3.11.964.283.249.512.558.916.678.353-.057.741-.086 1.168-.086zm-7.626 6.26c-.686 0-1.242.556-1.242 1.242s.556 1.242 1.242 1.242 1.242-.556 1.242-1.242-.556-1.242-1.242-1.242zm5.826 0c-.686 0-1.242.556-1.242 1.242s.556 1.242 1.242 1.242 1.242-.556 1.242-1.242-.556-1.242-1.242-1.242z"/></svg>'
     // },
     {
       url: "aqi_lu@163.com",
@@ -250,46 +319,35 @@ const initWebGPU = async () => {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 5;
 
-    // Step 5: 加载纹理
-    const textureLoader = new THREE.TextureLoader();
-    
-    const textureTimeout = addTimeout(5000, 'Texture loading');
-    const [rawMap, depthMap, edgeMap] = await Promise.all([
-      textureLoader.loadAsync(rawMapSrc),
-      textureLoader.loadAsync(depthMapSrc),
-      textureLoader.loadAsync(edgeMapSrc),
+    // Step 5: 创建 TextureLoader
+    textureLoader = new THREE.TextureLoader();
+
+    // 加载第一组纹理
+    const firstConfig = imageConfigs[0];
+    const textures = await Promise.all([
+      textureLoader.loadAsync(firstConfig.raw),
+      textureLoader.loadAsync(firstConfig.depth),
+      firstConfig.edge ? textureLoader.loadAsync(firstConfig.edge) : Promise.resolve(null),
     ]);
-    clearTimeout(textureTimeout);
 
-    rawMap.flipY = false;
-    rawMap.colorSpace = THREE.SRGBColorSpace;
-    depthMap.flipY = false;
-    edgeMap.flipY = false;
+    const [firstRawMap, firstDepthMap, firstEdgeMap] = textures;
 
-    const strength = 0.01;
-    const tDepthMap = texture(depthMap);
-    const tEdgeMap = texture(edgeMap);
-    const tMap = texture(rawMap, uv().add(tDepthMap.r.mul(uPointer).mul(strength))).mul(0.5);
-    const depth = tDepthMap;
-    const flow = sub(1, smoothstep(0, 0.02, abs(depth.sub(uProgress))));
-    const mask = oneMinus(tEdgeMap).mul(flow).mul(vec3(10, 0.4, 10));
-    const sceneColorNode = blendScreen(tMap, mask);
+    firstRawMap.flipY = false;
+    firstRawMap.colorSpace = THREE.SRGBColorSpace;
+    firstDepthMap.flipY = false;
+    if (firstEdgeMap) firstEdgeMap.flipY = false;
 
-    const material = new THREE.MeshBasicNodeMaterial({ colorNode: sceneColorNode });
-    const geometry = new THREE.PlaneGeometry(WIDTH / 100, HEIGHT / 100);
-    mesh = new THREE.Mesh(geometry, material);
-    scene.add(mesh);
-    updateMeshScale();
+    // 保存当前纹理引用
+    currentRawTexture = firstRawMap;
+    currentDepthTexture = firstDepthMap;
+    currentEdgeTexture = firstEdgeMap;
 
-    const scenePassColor = sceneColorNode;
-    const bloomPass = bloom(scenePassColor, 1, 0.5, 1);
-    const finalNode = add(scenePassColor, bloomPass);
+    // 创建初始场景
+    createSceneWithEffect(firstConfig.effectType);
 
-    postProcessing = new THREE.PostProcessing(renderer);
-    postProcessing.outputNode = finalNode;
-
+    // 启动扫描动画（只启动一次）
     gsap.to(uProgress, {
-      value: 1,
+      value: 1, // 改回 1，让扫描线完整扫过
       repeat: -1,
       duration: 3,
       ease: "power1.out",
@@ -297,8 +355,8 @@ const initWebGPU = async () => {
 
     const animate = () => {
       animationId = requestAnimationFrame(animate);
-      if (postProcessing) {
-        postProcessing.render();
+      if (renderPipeline) {
+        renderPipeline.render();
       } else {
         renderer.render(scene, camera);
       }
@@ -315,12 +373,179 @@ const initWebGPU = async () => {
     setTimeout(() => {
       webgpuLoaded.value = true;
     }, 300);
+
+    // 启动图片切换定时器
+    console.log('Starting image switcher...');
+    intervalId = setInterval(async () => {
+      currentImageIndex = (currentImageIndex + 1) % imageConfigs.length;
+      console.log(`Timer fired! Switching to index: ${currentImageIndex}, Image: ${imageConfigs[currentImageIndex].name}`);
+      await switchImage(currentImageIndex);
+    }, SWITCH_INTERVAL);
+    console.log('intervalId set to:', intervalId);
     
   } catch (error) {
+    console.error('WebGPU initialization error:', error);
     clearAllTimeouts();
     clearTimeout(forceHideTimeout);
     webgpuLoaded.value = true;
   }
+};
+
+// 根据效果类型创建场景
+const createSceneWithEffect = (effectType) => {
+  const strength = 0.01;
+  const tDepthMap = texture(currentDepthTexture);
+  
+  let final;
+
+  if (effectType === "dots") {
+    // 点阵效果 - Image 1
+    const tMap = texture(
+      currentRawTexture,
+      uv().add(tDepthMap.r.mul(uPointer).mul(strength))
+    );
+
+    const aspect = float(WIDTH).div(HEIGHT);
+    const tUv = vec2(uv().x.mul(aspect), uv().y);
+
+    const tiling = vec2(120.0);
+    const tiledUv = mod(tUv.mul(tiling), 2.0).sub(1.0);
+
+    const brightness = mx_cell_noise_float(tUv.mul(tiling).div(2));
+
+    const dist = float(tiledUv.length());
+    const dot = float(smoothstep(0.5, 0.49, dist)).mul(brightness);
+
+    const depth = tDepthMap;
+    const flow = oneMinus(smoothstep(0, 0.02, abs(depth.sub(uProgress))));
+
+    const mask = dot.mul(flow).mul(vec3(10, 0, 0));
+
+    final = blendScreen(tMap, mask);
+  } else if (effectType === "edge") {
+    // 边缘检测效果 - Image 2（不取反，正常从上到下扫描）
+    const tEdgeMap = texture(currentEdgeTexture);
+    const tMap = texture(
+      currentRawTexture,
+      uv().add(tDepthMap.r.mul(uPointer).mul(strength))
+    ).mul(0.5);
+
+    const depth = tDepthMap;
+    const flow = sub(1, smoothstep(0, 0.02, abs(depth.sub(uProgress))));
+    const mask = oneMinus(tEdgeMap).mul(flow).mul(vec3(10, 0.4, 10));
+
+    final = blendScreen(tMap, mask);
+  } else if (effectType === "cross") {
+    // 十字形效果 - Image 3（深度图取反，uProgress 映射到 0-0.9）
+    const tMap = texture(
+      currentRawTexture,
+      uv().add(tDepthMap.r.mul(uPointer).mul(strength))
+    ).mul(0.5);
+
+    const aspect = float(WIDTH).div(HEIGHT);
+    const tUv = vec2(uv().x.mul(aspect), uv().y);
+
+    const tiling = vec2(50.0);
+    const tiledUv = mod(tUv.mul(tiling), 2.0).sub(1.0);
+
+    // 使用 sdCross 函数节点
+    const dist = sdCross(tiledUv, vec2(0.3, 0.02), 0.0);
+    const cross = vec3(smoothstep(0.0, 0.02, dist));
+
+    // 深度图取反
+    const depth = oneMinus(tDepthMap);
+    
+    // 将 uProgress (0-1) 映射到 (0-0.9)，避免边缘白屏
+    const mappedProgress = uProgress.mul(0.9);
+    const flow = sub(1, smoothstep(0, 0.02, abs(depth.sub(mappedProgress))));
+
+    const mask = oneMinus(cross).mul(flow).mul(vec3(10, 10, 10));
+
+    final = blendScreen(tMap, mask);
+  }
+
+  // 销毁旧材质和 RenderPipeline
+  if (material) {
+    material.dispose();
+  }
+  if (renderPipeline) {
+    renderPipeline.dispose();
+  }
+
+  // 创建新材质
+  material = new THREE.MeshBasicNodeMaterial({ colorNode: final });
+  
+  // 如果 mesh 不存在则创建
+  if (!mesh) {
+    const geometry = new THREE.PlaneGeometry(WIDTH / 100, HEIGHT / 100);
+    mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+    updateMeshScale();
+  } else {
+    mesh.material = material;
+  }
+
+  // 创建新的 RenderPipeline
+  const scenePassColor = final;
+  const bloomPass = bloom(scenePassColor, 1, 0.5, 1);
+  const finalNode = add(scenePassColor, bloomPass);
+  
+  renderPipeline = new THREE.RenderPipeline(renderer);
+  renderPipeline.outputNode = finalNode;
+};
+
+// 切换图片
+const switchImage = async (index) => {
+  const config = imageConfigs[index];
+  console.log(`Switching to: ${config.name} with effect: ${config.effectType}`);
+
+  try {
+    // 更新主题
+    currentTheme.value = config.theme;
+    console.log(`Theme changed to: ${config.theme}`);
+
+    // 加载新纹理
+    const textures = await Promise.all([
+      textureLoader.loadAsync(config.raw),
+      textureLoader.loadAsync(config.depth),
+      config.edge ? textureLoader.loadAsync(config.edge) : Promise.resolve(null),
+    ]);
+
+    const [newRawMap, newDepthMap, newEdgeMap] = textures;
+
+    newRawMap.flipY = false;
+    newRawMap.colorSpace = THREE.SRGBColorSpace;
+    newRawMap.needsUpdate = true;
+    newDepthMap.flipY = false;
+    newDepthMap.needsUpdate = true;
+    if (newEdgeMap) {
+      newEdgeMap.flipY = false;
+      newEdgeMap.needsUpdate = true;
+    }
+
+    // 更新当前纹理引用
+    currentRawTexture = newRawMap;
+    currentDepthTexture = newDepthMap;
+    currentEdgeTexture = newEdgeMap;
+
+    // 根据效果类型重新创建场景
+    createSceneWithEffect(config.effectType);
+
+    console.log(`Switched to: ${config.name} successfully`);
+  } catch (error) {
+    console.error(`Failed to switch to ${config.name}:`, error);
+  }
+};
+
+// 图片切换功能
+const startImageSwitching = () => {
+  console.log('Starting image switching with interval:', SWITCH_INTERVAL);
+  intervalId = setInterval(async () => {
+    // 切换到下一张图片
+    currentImageIndex = (currentImageIndex + 1) % imageConfigs.length;
+    console.log(`Switching to index: ${currentImageIndex}`);
+    await loadImageConfig(currentImageIndex);
+  }, SWITCH_INTERVAL);
 };
 
 let tick = 0;
@@ -375,6 +600,7 @@ onMounted(() => {
   onBeforeUnmount(() => {
     clearInterval(timer);
     clearInterval(resizeTimer);
+    if (intervalId) clearInterval(intervalId); // 清除图片切换定时器
     cancelAnimationFrame(animationId);
     window.removeEventListener("resize", onResize);
     window.removeEventListener("mousemove", onMouseMove);
@@ -447,12 +673,15 @@ onMounted(() => {
 
 /* ========================================
    ✅ UI 层 - 关键修复：改为 auto
-   ======================================== */
+   ======
+  ================================== */
 .ui-layer {
   position: fixed;
   inset: 0;
   z-index: 60;
-  pointer-events: auto;
+  pointer-events: auto;display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ========================================

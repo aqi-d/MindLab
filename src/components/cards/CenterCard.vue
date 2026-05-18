@@ -1,14 +1,6 @@
 <template>
-  <div class="card card-center">
-    <!-- 背景光晕 -->
-    <div class="card-glow"></div>
-
-    <!-- 故障纹理 -->
-    <div class="card-glitch"></div>
-
-    <!-- 边框装饰 -->
-    <div class="card-border"></div>
-
+  <div class="card card-center" :class="[`theme-${theme}`]">
+    
     <div class="card-content">
       <!-- 头像区域 -->
       <div class="avatar-frame">
@@ -94,6 +86,11 @@ defineProps({
     type: String,
     default: "ONLINE",
   },
+  theme: {
+    type: String,
+    default: "cyberpunk",
+    validator: (v) => ["cyberpunk", "medieval", "minimal"].includes(v),
+  },
 });
 
 const toastMessage = ref("");
@@ -128,7 +125,7 @@ const handleSocialClick = (link) => {
 
 <style scoped>
 /* ========================================
-   中心卡片基础样式
+   中心卡片基础样式 - Cyberpunk 主题（默认）
    ======================================== */
 .card-center {
   position: absolute;
@@ -172,68 +169,234 @@ const handleSocialClick = (link) => {
 }
 
 /* ========================================
-   背景光晕与特效
+   Medieval 主题 - 中世纪黄色风格
    ======================================== */
-.card-glow {
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 0, 255, 0.15) 0%, transparent 60%);
-  opacity: 0;
-  transition: opacity 0.6s ease;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.card-center:hover .card-glow {
-  opacity: 1;
-}
-
-.card-glitch {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(0deg, transparent 50%, rgba(255, 0, 255, 0.03) 50%);
-  background-size: 100% 4px;
-  animation: glitch-bg 0.5s steps(2) infinite;
-  pointer-events: none;
-  opacity: 0.3;
-  z-index: 1;
-  border-radius: 24px;
-}
-
-@keyframes glitch-bg {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-2px);
-  }
-}
-
-.card-border {
-  position: absolute;
-  inset: 0;
-  border-radius: 24px;
-  border: 1px solid transparent;
+.card-center.theme-medieval {
   background: linear-gradient(
-      135deg,
-      rgba(255, 0, 255, 0.5),
-      transparent 40%,
-      transparent 60%,
-      rgba(0, 255, 255, 0.5)
-    )
-    border-box;
-  -webkit-mask:
-    linear-gradient(#fff 0 0) padding-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-  z-index: 3;
+    135deg,
+    rgba(139, 119, 70, 0.85) 0%,
+    rgba(160, 130, 80, 0.75) 50%,
+    rgba(139, 119, 70, 0.85) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  border: 2px solid rgba(218, 165, 32, 0.6);
+  border-radius: 20px;
+
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    inset 0 0 40px rgba(218, 165, 32, 0.15),
+    0 0 30px rgba(218, 165, 32, 0.2),
+    0 4px 20px rgba(139, 69, 19, 0.3);
 }
+
+.card-center.theme-medieval:hover {
+  border-color: rgba(255, 215, 0, 0.8);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.6),
+    inset 0 0 50px rgba(255, 215, 0, 0.2),
+    0 0 40px rgba(218, 165, 32, 0.35),
+    0 6px 25px rgba(139, 69, 19, 0.4);
+}
+
+.card-center.theme-medieval .greeting {
+  color: #d4af37;
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 3px;
+}
+
+.card-center.theme-medieval .name {
+  background: linear-gradient(135deg, #ffd700, #daa520, #b8860b);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 8px rgba(218, 165, 32, 0.5));
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.card-center.theme-medieval .role {
+  color: #f4e4c1;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.card-center.theme-medieval .role-icon {
+  filter: drop-shadow(0 0 5px rgba(218, 165, 32, 0.8));
+}
+
+.card-center.theme-medieval .social-link {
+  background: rgba(139, 119, 70, 0.3);
+  border: 1px solid rgba(218, 165, 32, 0.4);
+  color: #d4af37;
+}
+
+.card-center.theme-medieval .social-link:hover {
+  border-color: rgba(255, 215, 0, 0.8);
+  box-shadow:
+    0 10px 20px rgba(218, 165, 32, 0.4),
+    0 0 15px rgba(255, 215, 0, 0.3);
+}
+
+.card-center.theme-medieval .link-glow {
+  background: linear-gradient(135deg, rgba(218, 165, 32, 0.5), rgba(255, 215, 0, 0.5));
+}
+
+.card-center.theme-medieval .status-bar {
+  background: rgba(218, 165, 32, 0.15);
+  border: 1px solid rgba(218, 165, 32, 0.5);
+}
+
+.card-center.theme-medieval .status-dot {
+  background: #ffd700;
+  box-shadow: 0 0 10px #ffd700;
+}
+
+.card-center.theme-medieval .status-text {
+  color: #ffd700;
+}
+
+.card-center.theme-medieval .status-wave {
+  background: linear-gradient(90deg, transparent, rgba(218, 165, 32, 0.3), transparent);
+}
+
+.card-center.theme-medieval .card-corner {
+  border: 2px solid rgba(218, 165, 32, 0.7);
+}
+
+.card-center.theme-medieval:hover .card-corner {
+  border-color: rgba(255, 215, 0, 0.9);
+  box-shadow:
+    0 0 12px rgba(255, 215, 0, 0.7),
+    inset 0 0 12px rgba(218, 165, 32, 0.3);
+}
+
+.card-center.theme-medieval .ring-1 {
+  border-top-color: rgba(218, 165, 32, 0.9);
+  border-right-color: rgba(218, 165, 32, 0.9);
+}
+
+.card-center.theme-medieval .ring-2 {
+  border-bottom-color: rgba(255, 215, 0, 0.9);
+  border-left-color: rgba(255, 215, 0, 0.9);
+}
+
+.card-center.theme-medieval .ring-3 {
+  border-top-color: rgba(184, 134, 11, 0.6);
+  border-bottom-color: rgba(184, 134, 11, 0.6);
+}
+
+.card-center.theme-medieval .avatar-glow {
+  background: radial-gradient(circle, rgba(218, 165, 32, 0.4) 0%, transparent 70%);
+}
+
+/* ========================================
+   Minimal 主题 - 简约毛玻璃效果
+   ======================================== */
+.card-center.theme-minimal {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 28px;
+
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 0 30px rgba(255, 255, 255, 0.1);
+}
+
+.card-center.theme-minimal:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.25),
+    inset 0 0 40px rgba(255, 255, 255, 0.15);
+}
+
+.card-center.theme-minimal .greeting {
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 1.5px;
+}
+
+.card-center.theme-minimal .name {
+  background: linear-gradient(135deg, #ffffff, #e0e0e0);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
+}
+
+.card-center.theme-minimal .role {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.card-center.theme-minimal .role-icon {
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+}
+
+.card-center.theme-minimal .social-link {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.card-center.theme-minimal .social-link:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.card-center.theme-minimal .link-glow {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.2));
+}
+
+.card-center.theme-minimal .status-bar {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.card-center.theme-minimal .status-dot {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}
+
+.card-center.theme-minimal .status-text {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.card-center.theme-minimal .status-wave {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+}
+
+.card-center.theme-minimal .card-corner {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.card-center.theme-minimal:hover .card-corner {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.4),
+    inset 0 0 10px rgba(255, 255, 255, 0.15);
+}
+
+.card-center.theme-minimal .ring-1 {
+  border-top-color: rgba(255, 255, 255, 0.6);
+  border-right-color: rgba(255, 255, 255, 0.6);
+}
+
+.card-center.theme-minimal .ring-2 {
+  border-bottom-color: rgba(255, 255, 255, 0.5);
+  border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.card-center.theme-minimal .ring-3 {
+  border-top-color: rgba(255, 255, 255, 0.3);
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+.card-center.theme-minimal .avatar-glow {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+}
+
 
 /* ========================================
    卡片内容区

@@ -1,7 +1,7 @@
 <template>
   <div
     class="card card-sat"
-    :class="['card-' + type, { 'card-clickable': clickable }]"
+    :class="['card-' + type, `theme-${theme}`, { 'card-clickable': clickable }]"
     :style="cardPosition"
   >
     <!-- 发光效果 -->
@@ -104,6 +104,11 @@ const props = defineProps({
   subtitle: { type: String, default: "" },
   text: { type: String, default: "" },
   clickable: { type: Boolean, default: false },
+  theme: {
+    type: String,
+    default: "cyberpunk",
+    validator: (v) => ["cyberpunk", "medieval", "minimal"].includes(v),
+  },
 });
 
 // 天气相关状态
@@ -147,6 +152,9 @@ const fetchWeather = async () => {
           latitude = cacheData.latitude;
           longitude = cacheData.longitude;
           cityName = cacheData.city;
+          console.log('Using cached location:', cityName);
+        } else {
+          console.log('Cache expired or invalid');
         }
       } catch (e) {
         console.log('Cache parse error:', e);
@@ -157,12 +165,12 @@ const fetchWeather = async () => {
     if (!latitude || !longitude) {
       console.log('Fetching location...');
       
-      // API 1: geolocation-db.com (对CORS更友好)
+      // API 1: ipapi.co (支持中文，更准确)
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const res = await fetch("https://geolocation-db.com/json/", {
+        const res = await fetch("https://ipapi.co/json/", {
           method: 'GET',
           signal: controller.signal
         });
@@ -171,24 +179,25 @@ const fetchWeather = async () => {
         
         if (res.ok) {
           const data = await res.json();
-          if (data.latitude && data.longitude) {
+          console.log('ipapi.co response:', data);
+          if (!data.error && data.latitude) {
             latitude = data.latitude;
             longitude = data.longitude;
-            cityName = data.city || "Unknown";
-            console.log('Location from geolocation-db:', cityName);
+            cityName = data.city || data.region || "未知位置";
+            console.log('Location from ipapi.co:', cityName);
           }
         }
       } catch (e) {
-        console.log('geolocation-db failed:', e.message);
+        console.log('ipapi.co failed:', e.message);
       }
       
-      // API 2: ipapi.co (备用)
+      // API 2: geolocation-db.com (备用)
       if (!latitude || !longitude) {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 5000);
           
-          const res = await fetch("https://ipapi.co/json/", {
+          const res = await fetch("https://geolocation-db.com/json/", {
             method: 'GET',
             signal: controller.signal
           });
@@ -197,15 +206,16 @@ const fetchWeather = async () => {
           
           if (res.ok) {
             const data = await res.json();
-            if (!data.error && data.latitude) {
+            console.log('geolocation-db response:', data);
+            if (data.latitude && data.longitude) {
               latitude = data.latitude;
               longitude = data.longitude;
-              cityName = data.city || "Unknown";
-              console.log('Location from ipapi.co:', cityName);
+              cityName = data.city || data.state || data.country_name || "未知位置";
+              console.log('Location from geolocation-db:', cityName);
             }
           }
         } catch (e) {
-          console.log('ipapi.co failed:', e.message);
+          console.log('geolocation-db failed:', e.message);
         }
       }
       
@@ -215,6 +225,45 @@ const fetchWeather = async () => {
         latitude = 39.9042;
         longitude = 116.4074;
         cityName = "北京";
+      } else if (!cityName || cityName === "Unknown") {
+        cityName = "当前位置";
+      }
+      
+      // 尝试获取中文地名（使用 OpenStreetMap 反向地理编码）
+      if (cityName && (cityName === "未知位置" || cityName === "当前位置" || !cityName.includes('市') && !cityName.includes('省'))) {
+        try {
+          const geoController = new AbortController();
+          const geoTimeout = setTimeout(() => geoController.abort(), 3000);
+          
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=zh-CN`,
+            { signal: geoController.signal }
+          );
+          
+          clearTimeout(geoTimeout);
+          
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            console.log('Nominatim reverse geocoding:', geoData);
+            
+            // 提取中文地址：优先城市，其次区县，再其次省份
+            const address = geoData.address;
+            if (address) {
+              const city = address.city || address.town || address.county;
+              const state = address.state || address.province;
+              
+              if (city) {
+                cityName = city;
+              } else if (state) {
+                cityName = state;
+              }
+              
+              console.log('Chinese location name:', cityName);
+            }
+          }
+        } catch (e) {
+          console.log('Reverse geocoding failed:', e.message);
+        }
       }
       
       // 缓存位置数据
@@ -222,15 +271,16 @@ const fetchWeather = async () => {
         localStorage.setItem(cacheKey, JSON.stringify({
           latitude,
           longitude,
-          city: cityName || "Unknown",
+          city: cityName,
           timestamp: Date.now()
         }));
+        console.log('Location cached:', cityName);
       } catch (e) {
         console.log('Cache save error:', e);
       }
     }
 
-    city.value = cityName || "Unknown";
+    city.value = cityName || "未知位置";
 
     // 获取天气数据（增加超时时间到 15 秒）
     const weatherController = new AbortController();
@@ -343,7 +393,7 @@ const cardPosition = computed(() => {
 
 <style scoped>
 /* ========================================
-   卡片基础样式
+   卡片基础样式 - Cyberpunk 主题（默认）
    ======================================== */
 .card-sat {
   position: absolute;
@@ -393,6 +443,258 @@ const cardPosition = computed(() => {
     inset 0 0 40px rgba(0, 255, 255, 0.08),
     0 0 30px rgba(0, 255, 255, 0.2);
 }
+
+/* ========================================
+   Medieval 主题 - 中世纪黄色风格
+   ======================================== */
+.card-sat.theme-medieval {
+  background: linear-gradient(
+    135deg,
+    rgba(139, 119, 70, 0.8) 0%,
+    rgba(160, 130, 80, 0.7) 50%,
+    rgba(139, 119, 70, 0.8) 100%
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  border: 2px solid rgba(218, 165, 32, 0.5);
+  border-radius: 14px;
+
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 0 25px rgba(218, 165, 32, 0.1),
+    0 0 20px rgba(218, 165, 32, 0.15);
+}
+
+.card-sat.theme-medieval:hover {
+  border-color: rgba(255, 215, 0, 0.7);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    inset 0 0 35px rgba(255, 215, 0, 0.15),
+    0 0 30px rgba(218, 165, 32, 0.3);
+}
+
+.card-sat.theme-medieval .card-info h3 {
+  color: #ffd700;
+  text-shadow: 0 0 12px rgba(218, 165, 32, 0.6);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.card-sat.theme-medieval .card-info p {
+  color: #f4e4c1;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.card-sat.theme-medieval .card-glow {
+  background: radial-gradient(circle, rgba(218, 165, 32, 0.15) 0%, transparent 60%);
+}
+
+.card-sat.theme-medieval .card-border {
+  background: linear-gradient(
+      135deg,
+      rgba(218, 165, 32, 0.5),
+      transparent 40%,
+      transparent 60%,
+      rgba(255, 215, 0, 0.5)
+    )
+    border-box;
+}
+
+.card-sat.theme-medieval .card-corner {
+  border: 2px solid rgba(218, 165, 32, 0.6);
+}
+
+.card-sat.theme-medieval:hover .card-corner {
+  border-color: rgba(255, 215, 0, 0.9);
+  box-shadow:
+    0 0 10px rgba(255, 215, 0, 0.6),
+    inset 0 0 10px rgba(218, 165, 32, 0.3);
+}
+
+/* Medieval 主题的语录卡片 */
+.card-sat.theme-medieval.card-quote .quote-text {
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(218, 165, 32, 0.4);
+}
+
+.card-sat.theme-medieval.card-quote .quote-icon {
+  color: rgba(255, 215, 0, 0.9);
+}
+
+.card-sat.theme-medieval.card-quote .quote-line-1,
+.card-sat.theme-medieval.card-quote .quote-line-2 {
+  color: #f4e4c1;
+  text-shadow: 0 0 12px rgba(218, 165, 32, 0.5);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+/* Medieval 主题的日历卡片 */
+.card-sat.theme-medieval.card-calendar .cal-header {
+  border-bottom: 1px solid rgba(218, 165, 32, 0.3);
+}
+
+.card-sat.theme-medieval.card-calendar .cal-month {
+  color: #ffd700;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.card-sat.theme-medieval.card-calendar .cal-weekday {
+  color: rgba(218, 165, 32, 0.7);
+}
+
+.card-sat.theme-medieval.card-calendar .cal-day {
+  color: #f4e4c1;
+  background: rgba(218, 165, 32, 0.08);
+  border: 1px solid rgba(218, 165, 32, 0.2);
+}
+
+.card-sat.theme-medieval.card-calendar .cal-day.active {
+  background: linear-gradient(135deg, #daa520, #ffd700);
+  color: #fff;
+  border-color: #ffd700;
+  box-shadow: 0 0 15px rgba(218, 165, 32, 0.7);
+}
+
+/* Medieval 主题的天气卡片 */
+.card-sat.theme-medieval.card-weather .weather-icon {
+  filter: drop-shadow(0 0 20px rgba(218, 165, 32, 0.8));
+}
+
+.card-sat.theme-medieval.card-weather .weather-temp {
+  color: #ffd700;
+  text-shadow: 0 0 15px rgba(218, 165, 32, 0.7);
+}
+
+.card-sat.theme-medieval.card-weather .weather-city {
+  color: #f4e4c1;
+}
+
+.card-sat.theme-medieval.card-weather .weather-details {
+  background: rgba(139, 119, 70, 0.3);
+  border: 1px solid rgba(218, 165, 32, 0.2);
+  color: #f4e4c1;
+}
+
+/* ========================================
+   Minimal 主题 - 简约毛玻璃效果
+   ======================================== */
+.card-sat.theme-minimal {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 20px;
+
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.15),
+    inset 0 0 25px rgba(255, 255, 255, 0.08);
+}
+
+.card-sat.theme-minimal:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.2),
+    inset 0 0 35px rgba(255, 255, 255, 0.12);
+}
+
+.card-sat.theme-minimal .card-info h3 {
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.card-sat.theme-minimal .card-info p {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.card-sat.theme-minimal .card-glow {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, transparent 60%);
+}
+
+.card-sat.theme-minimal .card-border {
+  background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.3),
+      transparent 40%,
+      transparent 60%,
+      rgba(255, 255, 255, 0.3)
+    )
+    border-box;
+}
+
+.card-sat.theme-minimal .card-corner {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.card-sat.theme-minimal:hover .card-corner {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.4),
+    inset 0 0 10px rgba(255, 255, 255, 0.15);
+}
+
+/* Minimal 主题的语录卡片 */
+.card-sat.theme-minimal.card-quote .quote-text {
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.card-sat.theme-minimal.card-quote .quote-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.card-sat.theme-minimal.card-quote .quote-line-1,
+.card-sat.theme-minimal.card-quote .quote-line-2 {
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Minimal 主题的日历卡片 */
+.card-sat.theme-minimal.card-calendar .cal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.card-sat.theme-minimal.card-calendar .cal-month {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.card-sat.theme-minimal.card-calendar .cal-weekday {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.card-sat.theme-minimal.card-calendar .cal-day {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.card-sat.theme-minimal.card-calendar .cal-day.active {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+/* Minimal 主题的天气卡片 */
+.card-sat.theme-minimal.card-weather .weather-icon {
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.2));
+}
+
+.card-sat.theme-minimal.card-weather .weather-temp {
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.card-sat.theme-minimal.card-weather .weather-city {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.card-sat.theme-minimal.card-weather .weather-details {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+}
+
 
 /* ========================================
    发光效果
@@ -583,8 +885,8 @@ const cardPosition = computed(() => {
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   width: 100%;
-  margin-bottom: 4px;
-}
+  margin-bottom: 4px
+  }
 
 .cal-weekday {
   text-align: center;
