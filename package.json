@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "compress": "tsx scripts/img-compress-staged.ts",
     "photos": "tsx scripts/photos-manage.ts",
-    "prepare": "simple-git-hooks"
+    "prepare": ""
   },
   "dependencies": {
     "@shikijs/magic-move": "catalog:frontend",
