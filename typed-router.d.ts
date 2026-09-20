@@ -59,6 +59,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/posts/frontend-offline-resilience-zh': RouteRecordInfo<
+      '/posts/frontend-offline-resilience-zh',
+      '/posts/frontend-offline-resilience-zh',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/projects': RouteRecordInfo<
       '/projects',
       '/projects',
@@ -106,6 +113,14 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/index.md': {
       routes:
         | '/posts/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'pages/posts/frontend-offline-resilience-zh.md': {
+      routes:
+        | '/posts/frontend-offline-resilience-zh'
       views:
         | never
       pathParamNames:

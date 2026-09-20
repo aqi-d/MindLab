@@ -4,11 +4,11 @@ description: Frontend developer, designer, exploring full-stack.
 art: random
 ---
 
-Hey, I'm **aqi** — you can also call me **aq**.
+Hey, I am **aqi** — you can also call me **aq**.
 
-Frontend developer and designer. I've always been curious about the backend, and lately I've been heading toward full-stack.
+Frontend developer and designer, slowly wandering toward the backend, hoping to grow into a full-stack.
 
-Outside of work I like working out, running, playing games, and reading Liu Cixin.
+I am also someone who likes working out, running, playing games, and reading Liu Cixin.
 
 <div flex-auto />
 
